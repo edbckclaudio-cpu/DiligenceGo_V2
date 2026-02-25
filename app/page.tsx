@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { fetchZip, forEachCsvBlob, checkCVMConnectivity, headZip } from '../lib/downloader'
 import { runConsultation } from '../lib/engine'
 import { parseAndFilterByCNPJ, parseNamesAndCNPJs } from '../lib/csv'
@@ -20,6 +21,8 @@ import { Select, SelectTrigger, SelectContent, SelectItem } from '../components/
 import { useRef } from 'react'
 import { Badge } from '../components/ui/badge'
 import { ActionSheet } from '@capacitor/action-sheet'
+import { loginWithGoogle } from '../lib/auth'
+import { deleteCurrentUserData } from '../lib/account'
 
 type SectionData = {
   titulo: string
@@ -35,6 +38,7 @@ function currentYear() {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [cnpjInput, setCnpjInput] = useState('')
   const [year, setYear] = useState<number>(currentYear())
   const [loading, setLoading] = useState(false)
@@ -322,6 +326,39 @@ export default function Home() {
     const text = [`Grupo Econômico ${formatCNPJ(cleanCNPJ(cnpjInput))}`, ...lines].join('\n')
     await shareText('Grupo Econômico', text)
   }
+  async function enviarGovernanca(tipo: 'email' | 'whatsapp') {
+    const cards = buildGovernancaCards(grouped, cleanCNPJ(cnpjInput))
+    if (!cards.length) return
+    const lines: string[] = []
+    lines.push(`Governança ${formatCNPJ(cleanCNPJ(cnpjInput))}`)
+    for (const c of cards) {
+      lines.push(`\n${c.titulo}`)
+      for (const it of c.items.slice(0, 200)) {
+        const meta = [it.cargo, it.orgao, it.percentual].filter(Boolean).join(' • ') || '—'
+        const ref = it.ref ? ` • Ref: ${it.ref}` : ''
+        lines.push(`${it.nome || '—'} — ${meta}${ref}`)
+      }
+    }
+    await shareText('Governança', lines.join('\n'))
+  }
+  async function enviarRemuneracao(tipo: 'email' | 'whatsapp') {
+    const cards = buildRemuneracaoCards(grouped, cleanCNPJ(cnpjInput))
+    if (!cards.length) return
+    const lines: string[] = []
+    lines.push(`Remuneração ${formatCNPJ(cleanCNPJ(cnpjInput))}`)
+    for (const c of cards) {
+      lines.push(`\n${c.titulo}`)
+      for (const it of c.items.slice(0, 200)) {
+        const base = [it.cargo, it.orgao].filter(Boolean).join(' • ') || '—'
+        const fixo = it.fixo ? ` • Fixo: ${it.fixo}` : ''
+        const bonus = it.bonus ? ` • Bônus: ${it.bonus}` : ''
+        const total = it.total ? ` • Total: ${it.total}` : ''
+        const extremos = (it.maior || it.menor || it.medio) ? ` • Maior: ${it.maior || '—'} • Menor: ${it.menor || '—'} • Médio: ${it.medio || '—'}` : ''
+        lines.push(`${it.nome || '—'} — ${base}${fixo}${bonus}${total}${extremos}${it.ref ? ` • Ref: ${it.ref}` : ''}`)
+      }
+    }
+    await shareText('Remuneração', lines.join('\n'))
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
@@ -513,28 +550,38 @@ export default function Home() {
                       const cards = buildGovernancaCards(grouped, cleanCNPJ(cnpjInput))
                       if (cards.length === 0) return <div className="text-sm">Sem dados de governança.</div>
                       return (
-                        <div className="w-full overflow-x-auto flex flex-nowrap gap-3 tabs-mask py-1">
-                          {cards.map((c, idx) => (
-                            <Card key={idx} className="min-w-[280px] rounded-[32px] bg-slate-900 border-none shadow-2xl">
-                              <CardHeader>{c.titulo}</CardHeader>
-                              <CardContent>
-                                <ul className="space-y-2">
-                                  {c.items.slice(0, 20).map((it, i) => (
-                                    <li key={i} className="flex items-start gap-2">
-                                      <Circle className="h-4 w-4 text-slate-400 mt-1" />
-                                      <div className="text-sm text-slate-50">
-                                        <div>{it.nome || '—'}</div>
-                                        <div className="text-xs text-slate-400">
-                                          {[it.cargo, it.orgao, it.percentual].filter(Boolean).join(' • ') || '—'}
+                        <div className="space-y-3">
+                          <div className="w-full overflow-x-auto flex flex-nowrap gap-3 tabs-mask py-1">
+                            {cards.map((c, idx) => (
+                              <Card key={idx} className="min-w-[280px] rounded-[32px] bg-slate-900 border-none shadow-2xl">
+                                <CardHeader>{c.titulo}</CardHeader>
+                                <CardContent>
+                                  <ul className="space-y-2">
+                                    {c.items.slice(0, 20).map((it, i) => (
+                                      <li key={i} className="flex items-start gap-2">
+                                        <Circle className="h-4 w-4 text-slate-400 mt-1" />
+                                        <div className="text-sm text-slate-50">
+                                          <div>{it.nome || '—'}</div>
+                                          <div className="text-xs text-slate-400">
+                                            {[it.cargo, it.orgao, it.percentual].filter(Boolean).join(' • ') || '—'}
+                                          </div>
+                                          {it.ref ? <div className="text-[11px] text-slate-500">Ref: {it.ref}</div> : null}
                                         </div>
-                                        {it.ref ? <div className="text-[11px] text-slate-500">Ref: {it.ref}</div> : null}
-                                      </div>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </CardContent>
-                            </Card>
-                          ))}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarGovernanca('email')}>
+                              <Mail className="h-4 w-4" /> E-mail
+                            </Button>
+                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarGovernanca('whatsapp')}>
+                              <MessageCircle className="h-4 w-4" /> WhatsApp
+                            </Button>
+                          </div>
                         </div>
                       )
                     })()}
@@ -606,38 +653,48 @@ export default function Home() {
                       const cards = buildRemuneracaoCards(grouped, cleanCNPJ(cnpjInput))
                       if (cards.length === 0) return <div className="text-sm">Sem dados de remuneração.</div>
                       return (
-                        <div className="w-full overflow-x-auto flex flex-nowrap gap-3 tabs-mask py-1">
-                          {cards.map((c, idx) => (
-                            <Card key={idx} className="min-w-[280px] rounded-[32px] bg-slate-900 border-none shadow-2xl">
-                              <CardHeader>{c.titulo}</CardHeader>
-                              <CardContent>
-                                <ul className="space-y-2">
-                                  {c.items.slice(0, 20).map((it, i) => (
-                                    <li key={i} className="flex items-start gap-2">
-                                      <Circle className="h-4 w-4 text-slate-400 mt-1" />
-                                      <div className="text-sm text-slate-50">
-                                        <div>{it.nome || '—'}</div>
-                                        <div className="text-xs text-slate-400">
-                                          {[it.cargo, it.orgao].filter(Boolean).join(' • ') || '—'}
+                        <div className="space-y-3">
+                          <div className="w-full overflow-x-auto flex flex-nowrap gap-3 tabs-mask py-1">
+                            {cards.map((c, idx) => (
+                              <Card key={idx} className="min-w-[280px] rounded-[32px] bg-slate-900 border-none shadow-2xl">
+                                <CardHeader>{c.titulo}</CardHeader>
+                                <CardContent>
+                                  <ul className="space-y-2">
+                                    {c.items.slice(0, 20).map((it, i) => (
+                                      <li key={i} className="flex items-start gap-2">
+                                        <Circle className="h-4 w-4 text-slate-400 mt-1" />
+                                        <div className="text-sm text-slate-50">
+                                          <div>{it.nome || '—'}</div>
+                                          <div className="text-xs text-slate-400">
+                                            {[it.cargo, it.orgao].filter(Boolean).join(' • ') || '—'}
+                                          </div>
+                                          {(it.fixo || it.bonus || it.total) && (
+                                            <div className="text-xs text-slate-300">
+                                              {['Fixo: ' + (it.fixo || '—'), 'Bônus: ' + (it.bonus || '—'), 'Total: ' + (it.total || '—')].join(' • ')}
+                                            </div>
+                                          )}
+                                          {(it.maior || it.menor || it.medio) && (
+                                            <div className="text-xs text-slate-300">
+                                              {['Maior: ' + (it.maior || '—'), 'Menor: ' + (it.menor || '—'), 'Médio: ' + (it.medio || '—')].join(' • ')}
+                                            </div>
+                                          )}
+                                          {it.ref ? <div className="text-[11px] text-slate-500">Ref: {it.ref}</div> : null}
                                         </div>
-                                        {(it.fixo || it.bonus || it.total) && (
-                                          <div className="text-xs text-slate-300">
-                                            {['Fixo: ' + (it.fixo || '—'), 'Bônus: ' + (it.bonus || '—'), 'Total: ' + (it.total || '—')].join(' • ')}
-                                          </div>
-                                        )}
-                                        {(it.maior || it.menor || it.medio) && (
-                                          <div className="text-xs text-slate-300">
-                                            {['Maior: ' + (it.maior || '—'), 'Menor: ' + (it.menor || '—'), 'Médio: ' + (it.medio || '—')].join(' • ')}
-                                          </div>
-                                        )}
-                                        {it.ref ? <div className="text-[11px] text-slate-500">Ref: {it.ref}</div> : null}
-                                      </div>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </CardContent>
-                            </Card>
-                          ))}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarRemuneracao('email')}>
+                              <Mail className="h-4 w-4" /> E-mail
+                            </Button>
+                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarRemuneracao('whatsapp')}>
+                              <MessageCircle className="h-4 w-4" /> WhatsApp
+                            </Button>
+                          </div>
                         </div>
                       )
                     })()}
@@ -670,9 +727,22 @@ export default function Home() {
               <Button variant="outline" className="rounded-xl">Perfil</Button>
               <Button variant="outline" className="rounded-xl">Assinatura</Button>
               <Button variant="outline" className="rounded-xl">Termos de Uso</Button>
-              <Button variant="outline" className="rounded-xl">Privacidade</Button>
-              <Button variant="outline" className="rounded-xl">Exclusão de Conta</Button>
-              <Button variant="outline" className="rounded-xl">Login com Google</Button>
+              <Button variant="outline" className="rounded-xl" onClick={() => router.push('/privacidade')}>Privacidade</Button>
+              <Button variant="outline" className="rounded-xl" onClick={async () => {
+                const ok = confirm('Deseja excluir sua conta e dados? Esta ação é irreversível.')
+                if (!ok) return
+                const res = await deleteCurrentUserData()
+                if (!res.ok) alert('Falha na exclusão: ' + (res.message || ''))
+                else {
+                  alert('Conta e dados excluídos.')
+                  setShowMainMenu(false)
+                }
+              }}>Exclusão de Conta</Button>
+              <Button variant="outline" className="rounded-xl" onClick={async () => {
+                const res = await loginWithGoogle()
+                if (!res.ok) alert('Falha no login: ' + (res.message || ''))
+                else setShowMainMenu(false)
+              }}>Login com Google</Button>
             </div>
           </div>
         </div>
