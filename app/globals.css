@@ -1,0 +1,24 @@
+@import "tailwindcss";
+@theme {
+  --color-primary: #4169E1;
+  --radius-xl: 2rem;
+}
+
+:root {
+  --primary: #4169E1;
+  --background: #0f172a;
+  --foreground: #f4f4f5;
+  --radius: 2rem;
+}
+.dark {
+  --primary: #4169E1;
+  --background: #0f172a;
+  --foreground: #f4f4f5;
+  --radius: 2rem;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.tabs-mask {
+  mask-image: linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+}

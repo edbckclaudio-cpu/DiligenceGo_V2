@@ -1,0 +1,49 @@
+{
+  "name": "diligencego",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App móvel (Capacitor) com Next.js para análise e parse de dados CVM por CNPJ, processamento 100% local.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor-community/http": "latest",
+    "@capacitor/action-sheet": "latest",
+    "@capacitor/android": "latest",
+    "@capacitor/core": "latest",
+    "@capacitor/filesystem": "latest",
+    "@capacitor/haptics": "latest",
+    "@capacitor/share": "latest",
+    "@radix-ui/react-select": "latest",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "autoprefixer": "latest",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "idb-keyval": "latest",
+    "jszip": "latest",
+    "lucide-react": "latest",
+    "next": "latest",
+    "papaparse": "latest",
+    "postcss": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "latest"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "latest",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/papaparse": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "typescript": "latest"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DiligenceGo</string>
+    <string name="title_activity_main">DiligenceGo</string>
+    <string name="package_name">com.diligencego.app</string>
+    <string name="custom_url_scheme">com.diligencego.app</string>
+</resources>
