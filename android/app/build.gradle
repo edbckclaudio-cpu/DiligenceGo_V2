@@ -7,7 +7,7 @@ android {
         applicationId "com.diligencego.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 65
+        versionCode 67
         versionName "4.0.18"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -18,10 +18,10 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file(System.getenv("DG_KEYSTORE_PATH") ?: "C:/keys/diligencego.keystore")
-            storePassword System.getenv("DG_KEYSTORE_PASSWORD") ?: ""
-            keyAlias System.getenv("DG_KEY_ALIAS") ?: "diligencego"
-            keyPassword System.getenv("DG_KEY_PASSWORD") ?: ""
+            storeFile file("diligencego-release.keystore")
+            storePassword "diligencego123"
+            keyAlias "diligencego"
+            keyPassword "diligencego123"
         }
     }
     buildTypes {
