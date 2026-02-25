@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   appName: 'DiligenceGo',
   webDir: 'out',
   server: {
-    allowNavigation: ['dados.cvm.gov.br', 'accounts.google.com', 'oauth.googleusercontent.com', 'google.com']
+    allowNavigation: ['dados.cvm.gov.br', 'accounts.google.com', 'oauth.googleusercontent.com', 'google.com', 'sites.google.com']
   },
   plugins: {
     GoogleAuth: {

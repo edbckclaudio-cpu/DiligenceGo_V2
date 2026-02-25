@@ -726,7 +726,7 @@ export default function Home() {
               </Button>
               <Button variant="outline" className="rounded-xl">Perfil</Button>
               <Button variant="outline" className="rounded-xl">Assinatura</Button>
-              <Button variant="outline" className="rounded-xl">Termos de Uso</Button>
+              <Button variant="outline" className="rounded-xl" onClick={() => router.push('/termos')}>Termos de Uso</Button>
               <Button variant="outline" className="rounded-xl" onClick={() => router.push('/privacidade')}>Privacidade</Button>
               <Button variant="outline" className="rounded-xl" onClick={async () => {
                 const ok = confirm('Deseja excluir sua conta e dados? Esta ação é irreversível.')
