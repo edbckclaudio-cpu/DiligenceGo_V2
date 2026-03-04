@@ -1,6 +1,7 @@
 import './globals.css?v=1'
 import type { ReactNode } from 'react'
 import AppUrlHandler from './AppUrlHandler'
+import CordovaLoader from './CordovaLoader'
 
 export const metadata = {
   title: 'DiligenceGo',
@@ -12,6 +13,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="pt-BR" className="dark bg-slate-950">
       <body className="min-h-screen bg-slate-950 text-white pt-safe pb-safe">
         <div className="flex flex-col min-h-screen">
+          <CordovaLoader />
           <AppUrlHandler />
           <header className="border-b border-neutral-800">
             <div className="mx-auto max-w-2xl px-4 py-3 flex items-center justify-between">
