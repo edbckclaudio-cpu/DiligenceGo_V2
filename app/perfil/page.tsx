@@ -16,6 +16,13 @@ export default function PerfilPage() {
   const [user, setUser] = useState<UserInfo | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
   const [syncing, setSyncing] = useState<boolean>(true)
+  const [diag, setDiag] = useState<{ dev: boolean; cap: boolean; platform: string; store: boolean; reg: boolean }>({
+    dev: false,
+    cap: false,
+    platform: '',
+    store: false,
+    reg: false
+  })
 
   useEffect(() => {
     ;(async () => {
@@ -51,6 +58,36 @@ export default function PerfilPage() {
         setSyncing(false)
       }
     })()
+  }, [])
+
+  useEffect(() => {
+    const update = () => {
+      try {
+        const w: any = typeof window !== 'undefined' ? window : {}
+        const cap = !!w?.Capacitor?.isNativePlatform?.()
+        const platform = w?.Capacitor?.getPlatform?.() || ''
+        const st = w?.store || null
+        setDiag((d) => ({
+          ...d,
+          cap,
+          platform: String(platform || ''),
+          store: !!st,
+          reg: !!st?.register
+        }))
+      } catch {}
+    }
+    const onDev = () => setDiag((d) => ({ ...d, dev: true }))
+    try {
+      document.addEventListener('deviceready', onDev, { once: true } as any)
+    } catch {}
+    const id = setInterval(update, 500)
+    update()
+    return () => {
+      try {
+        clearInterval(id)
+        document.removeEventListener('deviceready', onDev as any)
+      } catch {}
+    }
   }, [])
 
   async function buyPremium() {
@@ -124,6 +161,13 @@ export default function PerfilPage() {
           )}
           <div className="mt-4 rounded-2xl bg-slate-900/60 border border-neutral-800 p-4">
             <div className="text-[11px] text-slate-500 break-all">ID: {user?.id || '—'}</div>
+          </div>
+          <div className="mt-2 rounded-xl bg-slate-900/60 border border-neutral-800 p-3">
+            <div className="text-[10px] text-slate-400">deviceready: {diag.dev ? 'ok' : 'aguardando'}</div>
+            <div className="text-[10px] text-slate-400">capacitor: {diag.cap ? 'ok' : 'não'}</div>
+            <div className="text-[10px] text-slate-400">platform: {diag.platform || '—'}</div>
+            <div className="text-[10px] text-slate-400">store: {diag.store ? 'ok' : 'não'}</div>
+            <div className="text-[10px] text-slate-400">register: {diag.reg ? 'ok' : 'não'}</div>
           </div>
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Button
