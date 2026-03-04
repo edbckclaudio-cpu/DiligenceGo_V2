@@ -19,8 +19,7 @@ function isAndroidNative(): boolean {
   }
 }
 
-async function waitForStore(timeoutMs = 6000): Promise<any> {
-  if (!isAndroidNative()) throw new Error('not-native')
+async function waitForStore(timeoutMs = 12000): Promise<any> {
   const tryGet = () => {
     const s = getStore()
     if (s && typeof s.register === 'function') return s
@@ -38,6 +37,9 @@ async function waitForStore(timeoutMs = 6000): Promise<any> {
     }
     try {
       document.addEventListener('deviceready', tick, { once: true } as any)
+    } catch {}
+    try {
+      document.addEventListener('DOMContentLoaded', tick, { once: true } as any)
     } catch {}
     setTimeout(tick, 0)
   })
