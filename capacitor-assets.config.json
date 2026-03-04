@@ -1,0 +1,14 @@
+{
+  "android": {
+    "icon": {
+      "source": "Icone/icone_diligencego_512.png",
+      "backgroundColor": "#0f172a"
+    },
+    "splash": {
+      "source": "Icone/icone_diligencego_1024x500.png",
+      "backgroundColor": "#0f172a",
+      "darkBackgroundColor": "#0f172a",
+      "padding": 24
+    }
+  }
+}

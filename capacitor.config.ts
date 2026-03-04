@@ -1,7 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
-const GOOGLE_WEB_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_WEB_CLIENT_ID || ''
-
 const config: CapacitorConfig = {
   appId: 'com.diligencego.app',
   appName: 'DiligenceGo',
@@ -12,7 +10,7 @@ const config: CapacitorConfig = {
   plugins: {
     GoogleAuth: {
       scopes: ['profile', 'email'],
-      serverClientId: GOOGLE_WEB_CLIENT_ID,
+      serverClientId: '1027488415010-flsh69tg5qfq9vk98tj6e2c6h2lrul80.apps.googleusercontent.com',
       forceCodeForRefreshToken: true
     }
   }

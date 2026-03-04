@@ -7,7 +7,7 @@ import { runConsultation } from '../lib/engine'
 import { parseAndFilterByCNPJ, parseNamesAndCNPJs } from '../lib/csv'
 import { saveResult, loadResult, clearOld } from '../lib/cache'
 import { shareCsv, shareText } from '../lib/export'
-import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu } from 'lucide-react'
+import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu, User } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Card, CardHeader, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -23,6 +23,7 @@ import { Badge } from '../components/ui/badge'
 import { ActionSheet } from '@capacitor/action-sheet'
 import { loginWithGoogle } from '../lib/auth'
 import { deleteCurrentUserData } from '../lib/account'
+import { getSupabase } from '../lib/supabase'
 
 type SectionData = {
   titulo: string
@@ -39,6 +40,7 @@ function currentYear() {
 
 export default function Home() {
   const router = useRouter()
+  const [logged, setLogged] = useState(false)
   const [cnpjInput, setCnpjInput] = useState('')
   const [year, setYear] = useState<number>(currentYear())
   const [loading, setLoading] = useState(false)
@@ -66,6 +68,19 @@ export default function Home() {
   const [showMainMenu, setShowMainMenu] = useState(false)
 
   const key = useMemo(() => `${cleanCNPJ(cnpjInput)}:${year}`, [cnpjInput, year])
+
+  useEffect(() => {
+    try {
+      const s = getSupabase()
+      s.auth.getSession().then(({ data }) => {
+        if (data?.session?.user) setLogged(true)
+      }).catch(() => {})
+      const sub = s.auth.onAuthStateChange((_e, s2) => {
+        setLogged(!!s2?.user)
+      })
+      return () => { try { (sub as any)?.data?.subscription?.unsubscribe?.() } catch {} }
+    } catch {}
+  }, [])
 
   const loadCnpjsForYear = async (y: number) => {
     try {
@@ -453,7 +468,17 @@ export default function Home() {
             )}
           </CardContent>
         </Card>
-        <div className="fixed top-6 right-6 z-30">
+        <div className="fixed top-6 right-6 z-30 flex items-center gap-2">
+          {logged ? (
+            <Button
+              variant="outline"
+              className="rounded-full h-12 w-12 p-0"
+              onClick={() => router.push('/perfil')}
+              aria-label="Perfil"
+            >
+              <User className="h-6 w-6" />
+            </Button>
+          ) : null}
           <Button className="rounded-full bg-slate-900 border border-neutral-800 text-white h-12 w-12 p-0" onClick={() => setShowMainMenu(true)}>
             <Menu className="h-6 w-6" />
           </Button>
@@ -715,7 +740,7 @@ export default function Home() {
       </div>
       {showMainMenu && (
         <div className="fixed inset-0 bg-black/40 z-40 flex items-end">
-          <div className="w-full rounded-t-[32px] bg-slate-900 border border-neutral-800 p-4 space-y-3">
+          <div className="w-full rounded-t-[32px] bg-slate-900 border border-neutral-800 p-4 space-y-3 pb-safe">
             <div className="flex justify-between items-center">
               <div className="text-base font-semibold text-slate-50">Menu</div>
               <Button variant="outline" onClick={() => setShowMainMenu(false)}>Fechar</Button>
@@ -724,8 +749,8 @@ export default function Home() {
               <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => { if (isPremium) enviar('csv') }} disabled={!isPremium}>
                 <Download className="h-4 w-4" /> Gerar Relatório Profissional
               </Button>
-              <Button variant="outline" className="rounded-xl">Perfil</Button>
-              <Button variant="outline" className="rounded-xl">Assinatura</Button>
+              <Button variant="outline" className="rounded-xl" onClick={() => router.push('/perfil')}>Perfil</Button>
+              <Button variant="outline" className="rounded-xl" onClick={() => router.push('/login')}>Assinatura</Button>
               <Button variant="outline" className="rounded-xl" onClick={() => router.push('/termos')}>Termos de Uso</Button>
               <Button variant="outline" className="rounded-xl" onClick={() => router.push('/privacidade')}>Privacidade</Button>
               <Button variant="outline" className="rounded-xl" onClick={async () => {
@@ -738,18 +763,13 @@ export default function Home() {
                   setShowMainMenu(false)
                 }
               }}>Exclusão de Conta</Button>
-              <Button variant="outline" className="rounded-xl" onClick={async () => {
-                const res = await loginWithGoogle()
-                if (!res.ok) alert('Falha no login: ' + (res.message || ''))
-                else setShowMainMenu(false)
-              }}>Login com Google</Button>
             </div>
           </div>
         </div>
       )}
       {showCnpjsModal && (
         <div className="fixed inset-0 bg-black/40 z-40 flex items-end">
-          <div className="w-full rounded-t-[32px] bg-slate-900 border border-neutral-800 p-4 space-y-3">
+          <div className="w-full rounded-t-[32px] bg-slate-900 border border-neutral-800 p-4 space-y-3 pb-safe">
             <div className="flex justify-between items-center">
               <div className="text-base font-semibold text-slate-50">CNPJs listadas {cnpjsYear ? `(${cnpjsYear})` : ''}</div>
               <Button variant="outline" onClick={() => { setShowCnpjsModal(false); setSelectedCnpj(null) }}>Fechar</Button>

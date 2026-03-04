@@ -1,0 +1,10 @@
+{
+  "name": "DiligenceGo",
+  "short_name": "DiligenceGo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#4169E1",
+  "description": "Análise local de dados CVM por CNPJ",
+  "icons": []
+}

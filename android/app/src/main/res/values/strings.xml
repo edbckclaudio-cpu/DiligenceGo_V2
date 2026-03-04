@@ -4,4 +4,7 @@
     <string name="title_activity_main">DiligenceGo</string>
     <string name="package_name">com.diligencego.app</string>
     <string name="custom_url_scheme">com.diligencego.app</string>
+    <string name="google_client_id">1027488415010-flsh69tg5qfq9vk98tj6e2c6h2lrul80.apps.googleusercontent.com</string>
+    <string name="server_client_id">1027488415010-flsh69tg5qfq9vk98tj6e2c6h2lrul80.apps.googleusercontent.com</string>
+    <string name="default_web_client_id">1027488415010-flsh69tg5qfq9vk98tj6e2c6h2lrul80.apps.googleusercontent.com</string>
 </resources>

@@ -16,3 +16,4 @@ android/app/src/main/assets/public/
 android/app/.idea/
 android/app/*.keystore
 *.keystore
+android/app/google-services.json
