@@ -17,3 +17,4 @@ android/app/.idea/
 android/app/*.keystore
 *.keystore
 android/app/google-services.json
+arquivos_firebase/
