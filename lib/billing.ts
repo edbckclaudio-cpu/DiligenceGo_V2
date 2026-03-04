@@ -19,11 +19,33 @@ function isAndroidNative(): boolean {
   }
 }
 
-async function ensureInit(productId: string): Promise<void> {
-  const store = getStore()
-  if (!isAndroidNative() || !store || typeof store.register !== 'function') {
-    throw new Error('Assinaturas só funcionam no app Android instalado pelo Google Play')
+async function waitForStore(timeoutMs = 6000): Promise<any> {
+  if (!isAndroidNative()) throw new Error('not-native')
+  const tryGet = () => {
+    const s = getStore()
+    if (s && typeof s.register === 'function') return s
+    return null
   }
+  const existing = tryGet()
+  if (existing) return existing
+  return await new Promise((resolve, reject) => {
+    const start = Date.now()
+    const tick = () => {
+      const s = tryGet()
+      if (s) return resolve(s)
+      if (Date.now() - start > timeoutMs) return reject(new Error('timeout'))
+      setTimeout(tick, 150)
+    }
+    try {
+      document.addEventListener('deviceready', tick, { once: true } as any)
+    } catch {}
+    setTimeout(tick, 0)
+  })
+}
+
+async function ensureInit(productId: string): Promise<void> {
+  const store = await waitForStore().catch(() => null)
+  if (!store) throw new Error('Assinaturas só funcionam no app Android instalado pelo Google Play')
   if (initialized) return
   if (initializing) return initializing
   initializing = new Promise<void>((resolve, reject) => {
@@ -50,8 +72,13 @@ export async function purchasePremium(productId?: string): Promise<{ ok: boolean
       productId ||
       ((typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_BILLING_PRODUCT_ID) as string) ||
       'premium_4999'
-    const store = getStore()
-    if (!isAndroidNative() || !store) {
+    let store: any = null
+    try {
+      store = await waitForStore()
+    } catch {
+      // fallthrough to message below
+    }
+    if (!store) {
       return { ok: false, message: 'Assinaturas só funcionam no app Android instalado pelo Google Play' }
     }
     await ensureInit(pid)
