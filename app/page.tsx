@@ -7,7 +7,7 @@ import { runConsultation } from '../lib/engine'
 import { parseAndFilterByCNPJ, parseNamesAndCNPJs } from '../lib/csv'
 import { saveResult, loadResult, clearOld } from '../lib/cache'
 import { shareCsv, shareText } from '../lib/export'
-import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu, User } from 'lucide-react'
+import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu, User, Crown, Lock } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Card, CardHeader, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -66,6 +66,10 @@ export default function Home() {
   const [showDrawer, setShowDrawer] = useState(false)
   const [drawerItem, setDrawerItem] = useState<{ nome: string; partFmt: string; cnpjInvestida: string; municipio: string; uf: string; tipo: string; indireta: boolean } | null>(null)
   const [showMainMenu, setShowMainMenu] = useState(false)
+  const [secretCount, setSecretCount] = useState(0)
+  const [secretOpen, setSecretOpen] = useState(false)
+  const secretTimerRef = useRef<any>(null)
+  const [secretDiag, setSecretDiag] = useState<{ adapters?: string; ready?: string; storeError?: string } | null>(null)
 
   const key = useMemo(() => `${cleanCNPJ(cnpjInput)}:${year}`, [cnpjInput, year])
 
@@ -81,6 +85,88 @@ export default function Home() {
       return () => { try { (sub as any)?.data?.subscription?.unsubscribe?.() } catch {} }
     } catch {}
   }, [])
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const s = getSupabase()
+        const { data: u } = await s.auth.getUser()
+        const id = u?.user?.id
+        if (!id) return
+        const { data: rows } = await s.from('profiles').select('subscription_status').eq('id', id).limit(1)
+        const status = String(rows?.[0]?.subscription_status || '')
+        if (status === 'premium') setIsPremium(true)
+        try {
+          const metaPrem = (u?.user as any)?.user_metadata?.is_premium
+          if (metaPrem === true) setIsPremium(true)
+        } catch {}
+      } catch {}
+    })()
+  }, [logged])
+  function openSecretPanel() {
+    try {
+      const w: any = typeof window !== 'undefined' ? window : {}
+      const st = w?.CdvPurchase?.store || w?.store || null
+      let adapters = ''
+      try {
+        const arr = st?.adapters?.list || []
+        adapters = arr.map((a: any) => {
+          const plat = a?.platform || a?.id || '?'
+          const r = a?.ready || a?._isReady || a?.initialized
+          let err = a?.error?.message || a?.error || ''
+          const code = a?.error?.code ?? a?.error?.billingResponseCode
+          const codeStr = (code !== undefined && code !== null && code !== '') ? `Erro ${String(code)}` : ''
+          const suffix = [codeStr, err ? String(err) : ''].filter(Boolean).join(' ')
+          return `${plat}:${r ? 'ok' : 'não'}${suffix ? `(${suffix})` : ''}`
+        }).join(', ')
+      } catch {}
+      let ready = ''
+      try { ready = st?.isReady ? 'ok' : 'não' } catch {}
+      let storeError = ''
+      try { storeError = String((w as any)?.DGStoreError || '') } catch {}
+      setSecretDiag({ adapters, ready, storeError })
+    } catch { setSecretDiag(null) }
+    setSecretOpen(true)
+  }
+  function onCrownTap() {
+    try { if (secretTimerRef.current) clearTimeout(secretTimerRef.current) } catch {}
+    setSecretCount(c => {
+      const next = c + 1
+      if (next >= 5) {
+        openSecretPanel()
+        return 0
+      }
+      secretTimerRef.current = setTimeout(() => setSecretCount(0), 800)
+      return next
+    })
+  }
+  async function openCnpjsYearPicker() {
+    try {
+      const years = [2021, 2022, 2023, 2024, 2025, 2026]
+      const res = await ActionSheet.showActions({ title: 'Não sabe o CNPJ? Escolha o ano', options: years.map(y => ({ title: String(y) })) })
+      if (res && typeof res.index === 'number' && res.index >= 0) {
+        const chosen = years[res.index]
+        await loadCnpjsForYear(chosen)
+        return
+      }
+    } catch {}
+  }
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const s = getSupabase()
+        const { data: u } = await s.auth.getUser()
+        const id = u?.user?.id
+        if (!id) return
+        const { data: rows } = await s.from('profiles').select('subscription_status').eq('id', id).limit(1)
+        const status = String(rows?.[0]?.subscription_status || '')
+        if (status === 'premium') setIsPremium(true)
+        try {
+          const metaPrem = (u?.user as any)?.user_metadata?.is_premium
+          if (metaPrem === true) setIsPremium(true)
+        } catch {}
+      } catch {}
+    })()
+  }, [logged])
 
   const loadCnpjsForYear = async (y: number) => {
     try {
@@ -154,7 +240,6 @@ export default function Home() {
     }
   }
   async function consultar() {
-    console.log('[DiligenceGo] consultar: início')
     runIdRef.current += 1
     const runId = runIdRef.current
     canceledRef.current = false
@@ -199,7 +284,6 @@ export default function Home() {
       }
     } catch (e: any) {
       const msg = e.message || 'Erro ao processar dados'
-      console.error('[DiligenceGo] consultar: erro', msg)
       setError(msg)
       setDiag(d => ({ ...d, lastError: msg }))
     } finally {
@@ -390,7 +474,7 @@ export default function Home() {
               />
               <Button variant="outline" onClick={async () => {
                 const years = [2021, 2022, 2023, 2024, 2025, 2026]
-                const options = [{ title: 'CNPJs listadas na CVM', style: 'destructive' }, ...years.map(y => ({ title: String(y) }))] as any
+                const options = [{ title: 'Ver CNPJs listadas na CVM', style: 'destructive' }, ...years.map(y => ({ title: String(y) }))] as any
                 try {
                   const res = await ActionSheet.showActions({ title: 'Escolha o ano', message: 'Use esta opção para descobrir o CNPJ pelo nome', options })
                   if (res && typeof res.index === 'number') {
@@ -443,11 +527,19 @@ export default function Home() {
                 <div>Status: {status || (error ? 'Erro' : (!!data.length ? 'Concluído' : 'Aguardando'))}</div>
                 <div>Linhas do CNPJ: {diag.rowsCount ?? 0}</div>
                 <div className="mt-2 flex gap-2 items-center">
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full" onClick={() => enviar('csv')} disabled={!grouped.length}>
-                    <Mail className="h-4 w-4" /> Email
+                  <Button
+                    className={`bg-blue-600 hover:bg-blue-700 text-white rounded-full ${!isPremium ? 'opacity-60' : ''}`}
+                    onClick={() => { if (!isPremium) router.push('/login'); else enviar('csv') }}
+                    disabled={!grouped.length}
+                  >
+                    {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <Mail className="h-4 w-4 mr-1" />} Email
                   </Button>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white rounded-full" onClick={() => enviar('texto')} disabled={!grouped.length}>
-                    <MessageCircle className="h-4 w-4" /> WhatsApp
+                  <Button
+                    className={`bg-blue-600 hover:bg-blue-700 text-white rounded-full ${!isPremium ? 'opacity-60' : ''}`}
+                    onClick={() => { if (!isPremium) router.push('/login'); else enviar('texto') }}
+                    disabled={!grouped.length}
+                  >
+                    {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <MessageCircle className="h-4 w-4 mr-1" />} WhatsApp
                   </Button>
                   <button
                     className="ml-2 inline-flex items-center justify-center h-7 w-7 rounded-full bg-neutral-800 text-white"
@@ -469,15 +561,16 @@ export default function Home() {
           </CardContent>
         </Card>
         <div className="fixed top-6 right-6 z-30 flex items-center gap-2">
-          {logged ? (
-            <Button
-              variant="outline"
-              className="rounded-full h-12 w-12 p-0"
-              onClick={() => router.push('/perfil')}
-              aria-label="Perfil"
+          {/* avatar removido no modo produção */}
+          {isPremium ? (
+            <button
+              aria-label="Premium"
+              className="inline-flex items-center justify-center h-6 w-6"
+              onClick={onCrownTap}
+              onTouchStart={onCrownTap}
             >
-              <User className="h-6 w-6" />
-            </Button>
+              <Crown style={{ width: 18, height: 18, color: '#d4af37' }} />
+            </button>
           ) : null}
           <Button className="rounded-full bg-slate-900 border border-neutral-800 text-white h-12 w-12 p-0" onClick={() => setShowMainMenu(true)}>
             <Menu className="h-6 w-6" />
@@ -508,8 +601,20 @@ export default function Home() {
               <TabsList className="flex-nowrap overflow-x-auto scrollbar-hide bg-transparent p-0 gap-2 -mx-4 px-4 [mask-image:linear-gradient(to_right,transparent_0,black_24px,black_calc(100%-24px),transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0,black_24px,black_calc(100%-24px),transparent_100%)]">
                 <TabsTrigger value="resumo" className="rounded-full bg-slate-900 border border-neutral-800 px-4 py-2 text-sm data-[state=active]:bg-[#4169E1] data-[state=active]:text-white">Resumo</TabsTrigger>
                 <TabsTrigger value="grupo" className="rounded-full bg-slate-900 border border-neutral-800 px-4 py-2 text-sm data-[state=active]:bg-[#4169E1] data-[state=active]:text-white">Grupo Econômico</TabsTrigger>
-                <TabsTrigger value="governanca" className="rounded-full bg-slate-900 border border-neutral-800 px-4 py-2 text-sm data-[state=active]:bg-[#4169E1] data-[state=active]:text-white">Governança</TabsTrigger>
-                <TabsTrigger value="remuneracao" className="rounded-full bg-slate-900 border border-neutral-800 px-4 py-2 text-sm data-[state=active]:bg-[#4169E1] data-[state=active]:text-white">Remuneração</TabsTrigger>
+                <TabsTrigger
+                  value="governanca"
+                  className={`rounded-full bg-slate-900 border border-neutral-800 px-4 py-2 text-sm data-[state=active]:bg-[#4169E1] data-[state=active]:text-white ${!isPremium ? 'opacity-60' : ''}`}
+                  onClick={(e) => { if (!isPremium) { e.preventDefault(); router.push('/login') } }}
+                >
+                  {!isPremium ? <span className="inline-flex items-center gap-1"><Lock className="h-4 w-4" /> Governança</span> : 'Governança'}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="remuneracao"
+                  className={`rounded-full bg-slate-900 border border-neutral-800 px-4 py-2 text-sm data-[state=active]:bg-[#4169E1] data-[state=active]:text-white ${!isPremium ? 'opacity-60' : ''}`}
+                  onClick={(e) => { if (!isPremium) { e.preventDefault(); router.push('/login') } }}
+                >
+                  {!isPremium ? <span className="inline-flex items-center gap-1"><Lock className="h-4 w-4" /> Remuneração</span> : 'Remuneração'}
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="resumo">
                 <Card className="rounded-[32px] bg-slate-900 border-none shadow-2xl">
@@ -554,11 +659,11 @@ export default function Home() {
                             </Card>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button variant="outline" onClick={() => enviar('csv')} disabled={!isPremium}>
-                              <Mail className="h-4 w-4" /> E-mail
+                            <Button variant="outline" onClick={() => { if (!isPremium) router.push('/login'); else enviar('csv') }} className={`${!isPremium ? 'opacity-60' : ''}`}>
+                              {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <Mail className="h-4 w-4 mr-1" />} E-mail
                             </Button>
-                            <Button variant="outline" onClick={() => enviar('texto')} disabled={!isPremium}>
-                              <MessageCircle className="h-4 w-4" /> WhatsApp
+                            <Button variant="outline" onClick={() => { if (!isPremium) router.push('/login'); else enviar('texto') }} className={`${!isPremium ? 'opacity-60' : ''}`}>
+                              {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <MessageCircle className="h-4 w-4 mr-1" />} WhatsApp
                             </Button>
                           </div>
                         </div>
@@ -600,11 +705,11 @@ export default function Home() {
                             ))}
                           </div>
                           <div className="flex gap-2">
-                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarGovernanca('email')}>
-                              <Mail className="h-4 w-4" /> E-mail
+                            <Button className={`bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl ${!isPremium ? 'opacity-60' : ''}`} onClick={() => { if (!isPremium) router.push('/login'); else enviarGovernanca('email') }}>
+                              {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <Mail className="h-4 w-4 mr-1" />} E-mail
                             </Button>
-                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarGovernanca('whatsapp')}>
-                              <MessageCircle className="h-4 w-4" /> WhatsApp
+                            <Button className={`bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl ${!isPremium ? 'opacity-60' : ''}`} onClick={() => { if (!isPremium) router.push('/login'); else enviarGovernanca('whatsapp') }}>
+                              {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <MessageCircle className="h-4 w-4 mr-1" />} WhatsApp
                             </Button>
                           </div>
                         </div>
@@ -638,11 +743,11 @@ export default function Home() {
                             ))}
                           </div>
                           <div className="flex gap-2">
-                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarGrupo('email')}>
-                              <Mail className="h-4 w-4" /> E-mail
+                            <Button className={`bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl ${!isPremium ? 'opacity-60' : ''}`} onClick={() => { if (!isPremium) router.push('/login'); else enviarGrupo('email') }}>
+                              {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <Mail className="h-4 w-4 mr-1" />} E-mail
                             </Button>
-                            <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarGrupo('whatsapp')}>
-                              <MessageCircle className="h-4 w-4" /> WhatsApp
+                            <Button className={`bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl ${!isPremium ? 'opacity-60' : ''}`} onClick={() => { if (!isPremium) router.push('/login'); else enviarGrupo('whatsapp') }}>
+                              {!isPremium ? <Lock className="h-4 w-4 mr-1" /> : <MessageCircle className="h-4 w-4 mr-1" />} WhatsApp
                             </Button>
                           </div>
                         </div>
@@ -714,10 +819,10 @@ export default function Home() {
                           </div>
                           <div className="flex gap-2">
                             <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarRemuneracao('email')}>
-                              <Mail className="h-4 w-4" /> E-mail
+                              <Mail className="h-4 w-4 mr-1" /> E-mail
                             </Button>
                             <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => enviarRemuneracao('whatsapp')}>
-                              <MessageCircle className="h-4 w-4" /> WhatsApp
+                              <MessageCircle className="h-4 w-4 mr-1" /> WhatsApp
                             </Button>
                           </div>
                         </div>
@@ -728,16 +833,28 @@ export default function Home() {
               </TabsContent>
               {/* Abas Litígios e Sancionador removidas por decisão de produto */}
             </Tabs>
-            {!isPremium && (
-              <div className="fixed bottom-6 left-6">
-                <Button variant="outline" onClick={() => setIsPremium(true)}>
-                  Ativar Premium (demo)
-                </Button>
-              </div>
-            )}
+            
+            <div className="text-xs">
+              <button className="text-[#4169E1] underline" onClick={openCnpjsYearPicker}>
+                Ver CNPJs listadas na CVM
+              </button>
+            </div>
           </div>
         )}
       </div>
+      {secretOpen && (
+        <div className="fixed inset-0 bg-black/40 z-40 flex items-end" onClick={() => setSecretOpen(false)}>
+          <div className="w-full rounded-t-[32px] bg-slate-900 border border-neutral-800 p-4 space-y-3 pb-safe" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center">
+              <div className="text-base font-semibold text-slate-50">Diagnóstico Secreto</div>
+              <Button variant="outline" onClick={() => setSecretOpen(false)}>Fechar</Button>
+            </div>
+            <div className="text-[11px] text-slate-400 break-all">adapters: {secretDiag?.adapters || '—'}</div>
+            <div className="text-[11px] text-slate-400">store.isReady: {secretDiag?.ready || '—'}</div>
+            <div className="text-[11px] text-slate-400 break-all">store.error: {secretDiag?.storeError || '—'}</div>
+          </div>
+        </div>
+      )}
       {showMainMenu && (
         <div className="fixed inset-0 bg-black/40 z-40 flex items-end">
           <div className="w-full rounded-t-[32px] bg-slate-900 border border-neutral-800 p-4 space-y-3 pb-safe">
@@ -747,7 +864,7 @@ export default function Home() {
             </div>
             <div className="grid grid-cols-1 gap-2">
               <Button className="bg-[#4169E1] hover:bg-blue-700 text-white rounded-xl" onClick={() => { if (isPremium) enviar('csv') }} disabled={!isPremium}>
-                <Download className="h-4 w-4" /> Gerar Relatório Profissional
+                <Download className="h-4 w-4" /> Informação Consolidada do CNPJ consultado
               </Button>
               <Button variant="outline" className="rounded-xl" onClick={() => router.push('/perfil')}>Perfil</Button>
               <Button variant="outline" className="rounded-xl" onClick={() => router.push('/login')}>Assinatura</Button>

@@ -4,6 +4,7 @@ import com.getcapacitor.BridgeActivity;
 import android.os.Bundle;
 import android.webkit.WebView;
 import android.util.Log;
+import android.view.WindowManager;
 import com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
@@ -13,6 +14,12 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    try {
+      getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+      Log.d("DG", "FLAG_SECURE ativada (anti-screenshot)");
+    } catch (Throwable t) {
+      Log.e("DG", "Falha ao ativar FLAG_SECURE", t);
+    }
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
       WebView.setWebContentsDebuggingEnabled(true);
     }
