@@ -1,5 +1,13 @@
 type Row = Record<string, unknown>
 
+/**
+ * Seleciona apenas colunas cujo nome "pareca" relevante para uma familia de termos.
+ * E uma heuristica usada por secoes mais abertas, como litigios e governanca.
+ *
+ * @param rows Linhas brutas do CSV.
+ * @param keys Termos de busca.
+ * @returns Subconjunto de objetos contendo apenas chaves relacionadas.
+ */
 function pick(rows: Row[], keys: string[]) {
   const lower = keys.map(k => k.toLowerCase())
   return rows.map(r => {
@@ -12,6 +20,12 @@ function pick(rows: Row[], keys: string[]) {
   }).filter(r => Object.keys(r).length > 0)
 }
 
+/**
+ * Monta um resumo executivo a partir das linhas filtradas do CNPJ.
+ *
+ * @param rows Linhas brutas da consulta.
+ * @returns Empresa, setor e contagem heuristica de litigios/processos.
+ */
 export function buildResumo(rows: Row[]) {
   const allKeys = Array.from(new Set(rows.flatMap(r => Object.keys(r))))
   const nameKey =
@@ -130,6 +144,13 @@ function findKey(keys: string[], candidates: string[], includesLogic?: (n: strin
   return undefined
 }
 
+/**
+ * Consolida a visao mais recente de capital social para o CNPJ consultado.
+ *
+ * @param grouped Dados agrupados por arquivo CSV.
+ * @param cnpj CNPJ normalizado.
+ * @returns Ultimo snapshot conhecido de capital social ou `null`.
+ */
 export function buildCapitalSocial(grouped: { file: string; rows: Row[] }[], cnpj: string) {
   const entry = grouped.find(g => g.file.toLowerCase().includes('capital_social'))
   if (!entry) return null
@@ -164,6 +185,13 @@ export function buildCapitalSocial(grouped: { file: string; rows: Row[] }[], cnp
   return { ref, valor, on, pn, total }
 }
 
+/**
+ * Monta cartoes detalhados de capital social, separados por tipo de capital.
+ *
+ * @param grouped Dados agrupados por arquivo.
+ * @param cnpj CNPJ normalizado.
+ * @returns Lista ordenada de snapshots detalhados.
+ */
 export function buildCapitalSocialDetailed(grouped: { file: string; rows: Row[] }[], cnpj: string) {
   const entry = grouped.find(g => g.file.toLowerCase().includes('capital_social'))
   if (!entry) return []
@@ -210,6 +238,13 @@ export function buildCapitalSocialDetailed(grouped: { file: string; rows: Row[] 
   return out.sort((a, b) => parseDateBR(a.ref) - parseDateBR(b.ref))
 }
 
+/**
+ * Consolida participacoes societarias para compor a aba de Grupo Economico.
+ *
+ * @param grouped Dados agrupados por arquivo.
+ * @param cnpj CNPJ normalizado.
+ * @returns Lista de investidas ordenada pela participacao percentual.
+ */
 export function buildGrupoEconomico(grouped: { file: string; rows: Row[] }[], cnpj: string) {
   const entry = grouped.find(g => g.file.toLowerCase().includes('participacao_sociedade'))
   if (!entry) return []
@@ -256,11 +291,24 @@ export function buildGrupoEconomico(grouped: { file: string; rows: Row[] }[], cn
   return out
 }
 
+/**
+ * Recorta campos ligados a governanca a partir do resultado bruto.
+ *
+ * @param rows Linhas brutas da consulta.
+ * @returns Linhas reduzidas contendo termos ligados a governanca.
+ */
 export function buildGovernanca(rows: Row[]) {
   const gov = pick(rows, ['diretor', 'administrador', 'conselho', 'acionista', 'participa', 'percent'])
   return gov
 }
 
+/**
+ * Monta os cartoes de governanca exibidos na aba Premium.
+ *
+ * @param grouped Dados agrupados por CSV.
+ * @param cnpj CNPJ normalizado.
+ * @returns Lista de cartoes por categoria (responsaveis, administradores, conselho etc.).
+ */
 export function buildGovernancaCards(grouped: { file: string; rows: Row[] }[], cnpj: string) {
   const categories = [
     { id: 'responsavel', titulo: 'Responsáveis', match: (f: string) => f.includes('responsavel') },
@@ -306,11 +354,24 @@ export function buildGovernancaCards(grouped: { file: string; rows: Row[] }[], c
   return out
 }
 
+/**
+ * Recorta campos ligados a remuneracao a partir do resultado bruto.
+ *
+ * @param rows Linhas brutas.
+ * @returns Linhas reduzidas com foco em remuneracao.
+ */
 export function buildRemuneracao(rows: Row[]) {
   const rem = pick(rows, ['remuner', 'fixo', 'bônus', 'bonus', 'órgão', 'orgao', 'conselho', 'diretoria'])
   return rem
 }
 
+/**
+ * Monta os cartoes de remuneracao a partir de heuristicas de nome de arquivo e coluna.
+ *
+ * @param grouped Dados agrupados por CSV.
+ * @param cnpj CNPJ normalizado.
+ * @returns Lista de cartoes por categoria de remuneracao.
+ */
 export function buildRemuneracaoCards(grouped: { file: string; rows: Row[] }[], cnpj: string) {
   function extractCurrencyFromText(s: unknown): number | undefined {
     const t = String(s ?? '').trim()
@@ -402,11 +463,23 @@ export function buildRemuneracaoCards(grouped: { file: string; rows: Row[] }[], 
   return out
 }
 
+/**
+ * Recorta linhas relacionadas a litigios/processos.
+ *
+ * @param rows Linhas brutas.
+ * @returns Linhas reduzidas contendo termos ligados a litigios.
+ */
 export function buildLitigios(rows: Row[]) {
   const lit = pick(rows, ['descri', 'valor', 'probabilidade', 'risco', 'causa'])
   return lit
 }
 
+/**
+ * Converte linhas brutas em uma visao simplificada de litigios para exibicao.
+ *
+ * @param rows Linhas brutas.
+ * @returns Lista de objetos com descricao, valor e probabilidade.
+ */
 export function buildLitigiosDetailed(rows: Row[]) {
   const out: { Descricao?: string; Valor?: string; Probabilidade?: string }[] = []
   for (const r of rows) {

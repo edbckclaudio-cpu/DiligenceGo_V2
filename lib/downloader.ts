@@ -4,6 +4,11 @@ import { Filesystem, Directory } from '@capacitor/filesystem'
 import { Capacitor } from '@capacitor/core'
 
 export type Progress = { loaded: number; total?: number; percent?: number }
+
+/**
+ * Detecta se a execucao atual esta em Android nativo com plugin HTTP disponivel.
+ * Essa escolha impacta toda a estrategia de download (fetch web vs HTTP nativo).
+ */
 function isNativeAndroid(): boolean {
   try {
     const p = Capacitor.getPlatform()
@@ -14,6 +19,14 @@ function isNativeAndroid(): boolean {
     return false
   }
 }
+
+/**
+ * Faz uma sondagem leve do ZIP remoto para obter status HTTP e, quando possivel,
+ * o tamanho do arquivo antes do download completo.
+ *
+ * @param url URL do ZIP da CVM.
+ * @returns Status da consulta e tamanho estimado do arquivo, se disponivel.
+ */
 export async function headZip(url: string): Promise<{ ok: boolean; status: number; length?: number }> {
   try {
     if (!isNativeAndroid()) {
@@ -66,13 +79,18 @@ export async function headZip(url: string): Promise<{ ok: boolean; status: numbe
     return { ok: false, status }
   }
 }
+
+/**
+ * Verifica se a base publica da CVM esta respondendo.
+ *
+ * @returns Status simples de conectividade para exibir feedback na Home.
+ */
 export async function checkCVMConnectivity(): Promise<{ ok: boolean; status: number }> {
   try {
     if (!isNativeAndroid()) {
       try {
         const res = await fetch('https://dados.cvm.gov.br/', { method: 'HEAD' })
         if (!res.ok) return { ok: false, status: res.status || 0 }
-        console.log('[DiligenceGo] Conectividade CVM: OK.', res.status)
         return { ok: true, status: res.status || 200 }
       } catch {
         const res2 = await fetch('https://cors.isomorphic-git.org/https://dados.cvm.gov.br/', { method: 'GET', headers: { Range: 'bytes=0-0' } })
@@ -85,7 +103,6 @@ export async function checkCVMConnectivity(): Promise<{ ok: boolean; status: num
         connectTimeout: 30000,
         readTimeout: 30000
       })
-      console.log('[DiligenceGo] Conectividade CVM: OK.', res.status)
       return { ok: true, status: res.status ?? 200 }
     }
   } catch (e: any) {
@@ -94,11 +111,21 @@ export async function checkCVMConnectivity(): Promise<{ ok: boolean; status: num
   }
 }
 
+/**
+ * Baixa um ZIP da CVM usando a melhor estrategia para o ambiente atual.
+ *
+ * Estrategias:
+ * - Web: tenta proxy CORS e depois fetch direto.
+ * - Android nativo: usa `Http.downloadFile()`; em falha, tenta `Http.request()`.
+ *
+ * @param url URL do ZIP.
+ * @param onProgress Callback opcional para progresso de download.
+ * @returns Buffer do arquivo, tamanho em bytes e origem efetiva da leitura.
+ */
 export async function fetchZip(url: string, onProgress?: (p: Progress) => void): Promise<{ buffer: ArrayBuffer; size: number; source: string }> {
   let sub: any
   try {
     if (!isNativeAndroid()) {
-      console.log('[DiligenceGo] Usando Fetch (Web)')
       const headers = { 'Accept': 'application/zip,application/octet-stream' }
       // Proxy primeiro
       try {
@@ -126,7 +153,6 @@ export async function fetchZip(url: string, onProgress?: (p: Progress) => void):
       }
     }
     // ANDROID / NATIVO
-    console.log('[DiligenceGo] Usando HTTP Nativo')
     if (onProgress) {
       sub = await Http.addListener('progress', (ev: any) => {
         if (ev?.type === 'download') {
@@ -138,7 +164,6 @@ export async function fetchZip(url: string, onProgress?: (p: Progress) => void):
       })
     }
     const name = `fre_${Date.now()}.zip`
-    console.log('[DiligenceGo] URL final para download:', url)
     try {
       await Http.downloadFile({
         url,
@@ -206,6 +231,12 @@ export async function fetchZip(url: string, onProgress?: (p: Progress) => void):
   }
 }
 
+/**
+ * Percorre todos os CSVs de um ZIP e delega cada blob para um handler assíncrono.
+ *
+ * @param zipBuffer Conteudo bruto do ZIP.
+ * @param handler Callback executado para cada arquivo CSV encontrado.
+ */
 export async function forEachCsvBlob(zipBuffer: ArrayBuffer, handler: (name: string, blob: Blob) => Promise<void>): Promise<void> {
   const zip = await JSZip.loadAsync(zipBuffer)
   const entries = Object.values(zip.files).filter(f => !f.dir && f.name.toLowerCase().endsWith('.csv'))

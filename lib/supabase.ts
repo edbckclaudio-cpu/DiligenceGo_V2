@@ -6,6 +6,11 @@ const SUPABASE_ANON =
 
 let client: SupabaseClient | null = null
 
+/**
+ * Retorna a instancia singleton do cliente Supabase usada pelo app.
+ *
+ * @returns Cliente Supabase compartilhado por autenticacao e acesso a dados.
+ */
 export function getSupabase() {
   const url = SUPABASE_URL
   const anon = SUPABASE_ANON

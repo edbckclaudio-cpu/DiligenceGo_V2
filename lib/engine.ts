@@ -21,6 +21,21 @@ export type ConsultDiag = {
 type ProgressCB = (p: { percent?: number; loaded?: number }) => void
 type StatusCB = (s: string) => void
 
+/**
+ * Executa a consulta principal do app para um CNPJ/ano.
+ *
+ * Pipeline:
+ * 1. Limpa cache antigo
+ * 2. Tenta servir do cache local
+ * 3. Faz HEAD e download do ZIP FRE da CVM
+ * 4. Percorre CSVs e filtra pelo CNPJ
+ * 5. Persiste o resultado no cache
+ *
+ * @param cnpj CNPJ normalizado com 14 digitos.
+ * @param year Ano-base da consulta.
+ * @param opts Callbacks opcionais para progresso e status da UI.
+ * @returns Resultado bruto (`items`), agrupado por arquivo (`grouped`) e diagnosticos (`diag`).
+ */
 export async function runConsultation(cnpj: string, year: number, opts?: { onProgress?: ProgressCB; onStatus?: StatusCB }) {
   const diag: ConsultDiag = { startedAt: Date.now(), bytes: 0, csvCount: 0, rowsCount: 0 }
   const key = `${cnpj}:${year}`

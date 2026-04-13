@@ -9,6 +9,11 @@ type StoredResult = {
 const DB_NAME = 'diligencego'
 const STORE_NAME = 'results'
 
+/**
+ * Abre a base IndexedDB local usada para cachear consultas por `CNPJ:ANO`.
+ *
+ * @returns Conexao aberta com o banco local do navegador.
+ */
 function getDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1)
@@ -23,6 +28,12 @@ function getDB(): Promise<IDBDatabase> {
   })
 }
 
+/**
+ * Persiste um resultado de consulta no cache local.
+ *
+ * @param key Chave composta, geralmente `CNPJ:ANO`.
+ * @param data Payload da consulta.
+ */
 export async function saveResult(key: string, data: StoredResult): Promise<void> {
   const db = await getDB()
   await new Promise<void>((resolve, reject) => {
@@ -35,6 +46,12 @@ export async function saveResult(key: string, data: StoredResult): Promise<void>
   db.close()
 }
 
+/**
+ * Recupera um resultado previamente armazenado no cache local.
+ *
+ * @param key Chave composta `CNPJ:ANO`.
+ * @returns Resultado persistido ou `null` quando inexistente.
+ */
 export async function loadResult(key: string): Promise<StoredResult | null> {
   const db = await getDB()
   const result = await new Promise<StoredResult | null>((resolve, reject) => {
@@ -48,6 +65,11 @@ export async function loadResult(key: string): Promise<StoredResult | null> {
   return result
 }
 
+/**
+ * Remove uma entrada especifica do cache local.
+ *
+ * @param key Chave composta `CNPJ:ANO`.
+ */
 export async function deleteResult(key: string): Promise<void> {
   const db = await getDB()
   await new Promise<void>((resolve, reject) => {
@@ -60,6 +82,11 @@ export async function deleteResult(key: string): Promise<void> {
   db.close()
 }
 
+/**
+ * Remove entradas antigas do cache para reduzir uso local e evitar servir dados obsoletos.
+ *
+ * @param days Janela maxima de permanencia em dias.
+ */
 export async function clearOld(days: number): Promise<void> {
   const db = await getDB()
   await new Promise<void>((resolve, reject) => {

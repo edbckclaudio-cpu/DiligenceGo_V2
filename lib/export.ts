@@ -1,6 +1,12 @@
 import { Share } from '@capacitor/share'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 
+/**
+ * Converte um array de objetos em CSV separado por `;`, com BOM UTF-8.
+ *
+ * @param rows Linhas a serem exportadas.
+ * @returns Conteudo CSV textual.
+ */
 function toCsv(rows: Record<string, unknown>[]): string {
   if (!rows.length) return '\uFEFF'
   const headers = Object.keys(rows[0])
@@ -17,6 +23,12 @@ function toCsv(rows: Record<string, unknown>[]): string {
   return '\uFEFF' + lines.join('\n')
 }
 
+/**
+ * Gera um CSV em cache local e abre a folha de compartilhamento nativa.
+ *
+ * @param filename Nome do arquivo CSV.
+ * @param rows Linhas a serem serializadas.
+ */
 export async function shareCsv(filename: string, rows: Record<string, unknown>[]): Promise<void> {
   const csv = toCsv(rows)
   const encoder = new TextEncoder()
@@ -44,6 +56,12 @@ export async function shareCsv(filename: string, rows: Record<string, unknown>[]
   })
 }
 
+/**
+ * Compartilha texto simples via folha de compartilhamento nativa do dispositivo.
+ *
+ * @param title Titulo exibido pelo sistema, quando suportado.
+ * @param text Conteudo textual a ser compartilhado.
+ */
 export async function shareText(title: string, text: string): Promise<void> {
   await Share.share({
     title,

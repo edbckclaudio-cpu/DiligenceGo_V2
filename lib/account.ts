@@ -1,5 +1,10 @@
  import { getSupabase } from './supabase'
  
+/**
+ * Exclui os dados do usuario autenticado por meio de uma RPC no Supabase e encerra a sessao.
+ *
+ * @returns Resultado simples para a UI (`ok` / `message`).
+ */
  export async function deleteCurrentUserData(): Promise<{ ok: boolean; message?: string }> {
    try {
      const supabase = getSupabase()

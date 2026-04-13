@@ -4,6 +4,18 @@ import { getSupabase } from './supabase'
 
 let webInitialized = false
 
+/**
+ * Executa login com Google e cria/recupera a sessao no Supabase.
+ *
+ * Estrategia:
+ * - Web: usa `GoogleAuth.initialize()` + `signIn()` e troca o `idToken` por sessao no Supabase.
+ * - Android nativo: tenta `GoogleAuth.signIn()`; em falha, cai para OAuth do Supabase com deep link.
+ *
+ * @returns Objeto com status do login:
+ * - `ok: true` em sucesso
+ * - `deferred: true` quando o fluxo nativo continua fora do app e depende do retorno por deep link
+ * - `message` em falhas conhecidas
+ */
 export async function loginWithGoogle(): Promise<{ ok: boolean; message?: string; deferred?: boolean }> {
   function toMsg(err: any): string {
     const code = err?.code ?? err?.status ?? err?.statusCode

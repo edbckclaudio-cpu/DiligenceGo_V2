@@ -2,6 +2,13 @@ import Papa from 'papaparse'
 
 export type Row = Record<string, unknown>
 
+/**
+ * Faz parse de um CSV da CVM e retorna apenas as linhas do CNPJ informado.
+ *
+ * @param blob Blob do arquivo CSV.
+ * @param cnpj CNPJ normalizado com 14 digitos.
+ * @returns Lista de linhas (objetos chave/valor) filtradas pelo CNPJ.
+ */
 export async function parseAndFilterByCNPJ(blob: Blob, cnpj: string): Promise<Row[]> {
   return new Promise<Row[]>((resolve) => {
     const results: Row[] = []
@@ -24,6 +31,13 @@ export async function parseAndFilterByCNPJ(blob: Blob, cnpj: string): Promise<Ro
   })
 }
 
+/**
+ * Extrai pares nome/CNPJ de um CSV da CVM.
+ * Usado no fluxo de descoberta de CNPJ pelo nome da companhia.
+ *
+ * @param blob Blob do CSV.
+ * @returns Lista de pares `{ cnpj, nome }`.
+ */
 export async function parseNamesAndCNPJs(blob: Blob): Promise<{ cnpj: string; nome: string }[]> {
   return new Promise<{ cnpj: string; nome: string }[]>((resolve) => {
     const results: { cnpj: string; nome: string }[] = []

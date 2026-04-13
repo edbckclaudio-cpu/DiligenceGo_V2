@@ -2,12 +2,22 @@ import { getSupabase } from './supabase'
 let initialized = false
 let initializing: Promise<void> | null = null
 
+/**
+ * Retorna a instancia do Store do plugin de billing (cordova-plugin-purchase).
+ * No Android nativo, o objeto costuma estar em `window.CdvPurchase.store`.
+ *
+ * @returns Store do billing ou `null` quando indisponivel (SSR/web sem plugin).
+ */
 function getStore(): any {
   if (typeof window === 'undefined') return null
   const w = window as any
   return w?.CdvPurchase?.store || w?.store || null
 }
 
+/**
+ * Detecta se estamos rodando no Android nativo (Capacitor).
+ * Usado para garantir mensagens e fluxos coerentes em modo web vs APK.
+ */
 function isAndroidNative(): boolean {
   if (typeof window === 'undefined') return false
   const w = window as any
@@ -21,6 +31,16 @@ function isAndroidNative(): boolean {
   }
 }
 
+/**
+ * Espera o Store do billing ficar disponivel no runtime.
+ *
+ * Por que existe:
+ * - Em apps Capacitor/Cordova, o plugin pode ainda nao ter sido injetado no momento
+ *   em que o JS inicializa.
+ *
+ * @param timeoutMs Tempo maximo de espera, em ms.
+ * @returns Promise com o store quando encontrado; rejeita em timeout.
+ */
 async function waitForStore(timeoutMs = 12000): Promise<any> {
   const tryGet = () => {
     const s = getStore()
@@ -47,12 +67,23 @@ async function waitForStore(timeoutMs = 12000): Promise<any> {
   })
 }
 
+/**
+ * Inicializa o motor de billing do cordova-plugin-purchase de forma "blindada" para producao.
+ *
+ * ATENCAO (producao):
+ * - Chamadas prematuras ou repetidas de `store.update()` podem travar o plugin em alguns
+ *   dispositivos/contas. O fluxo foi ajustado com base em logs reais de usuarios.
+ * - Mantenha o delay de 5s apos `deviceready` e chame `store.update()` apenas dentro
+ *   do callback de `store.ready()`.
+ *
+ * @param productId ID do produto (assinatura) cadastrado no Google Play Console.
+ */
 async function ensureInit(productId: string): Promise<void> {
   const store = await waitForStore().catch(() => null)
   if (!store) throw new Error('Assinaturas só funcionam no app Android instalado pelo Google Play')
   if (initialized) return
   if (initializing) return initializing
-  // CRITICAL: CORE BILLING LOGIC - DO NOT MODIFY INITIALIZATION FLOW.
+  // CRITICAL: CORE ENGINE & BILLING - DO NOT MODIFY FLOW
   initializing = new Promise<void>((resolve, reject) => {
     try {
       const w = window as any
@@ -288,6 +319,20 @@ async function ensureInit(productId: string): Promise<void> {
   return initializing
 }
 
+/**
+ * Dispara o fluxo de compra da assinatura Premium.
+ *
+ * Fluxo:
+ * 1. Garante que o store existe e esta inicializado (`ensureInit`)
+ * 2. Aguarda produto/oferta aparecerem no store
+ * 3. Executa `offer.order()`
+ * 4. Em `approved`, persiste premium no Supabase:
+ *    - `profiles.subscription_status = 'premium'`
+ *    - `user_metadata.is_premium = true`
+ *
+ * @param productId Opcional. Se omitido, usa `NEXT_PUBLIC_BILLING_PRODUCT_ID` ou `'renovaauto'`.
+ * @returns `{ ok: true }` quando aprovado; `{ ok: false, message }` em falhas.
+ */
 export async function purchasePremium(productId?: string): Promise<{ ok: boolean; message?: string }> {
   try {
     const pid =
@@ -399,6 +444,11 @@ export async function purchasePremium(productId?: string): Promise<{ ok: boolean
   }
 }
 
+/**
+ * Resolve o ID do produto de assinatura no billing.
+ *
+ * @returns ID do produto (ex.: `'renovaauto'`).
+ */
 export function getBillingProductId(): string {
   const pid =
     ((typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_BILLING_PRODUCT_ID) as string) ||
@@ -406,6 +456,13 @@ export function getBillingProductId(): string {
   return pid
 }
 
+/**
+ * Tenta inicializar o billing de forma idempotente.
+ *
+ * Observacao:
+ * - Esta funcao nao deve criar loops nem retries agressivos.
+ * - O objetivo e permitir chamadas "seguras" (ex.: ao abrir o Perfil) sem sufocar o plugin.
+ */
 export async function retryBillingInit(): Promise<void> {
   try {
     const pid = getBillingProductId()
