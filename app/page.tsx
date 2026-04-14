@@ -7,7 +7,7 @@ import { runConsultation } from '../lib/engine'
 import { parseAndFilterByCNPJ, parseNamesAndCNPJs } from '../lib/csv'
 import { saveResult, loadResult, clearOld } from '../lib/cache'
 import { shareCsv, shareText } from '../lib/export'
-import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu, User, Crown, Lock } from 'lucide-react'
+import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu, User, Crown, Lock, ExternalLink } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Card, CardHeader, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -497,6 +497,14 @@ export default function Home() {
               }}>
                 Ano: {year}
               </Button>
+            </div>
+            <div className="text-left">
+              <button
+                className="text-blue-600 underline inline-flex items-center gap-1 text-sm font-medium"
+                onClick={openCnpjsYearPicker}
+              >
+                <ExternalLink className="h-4 w-4" /> Ver CNPJs listadas na CVM
+              </button>
             </div>
             <div className="flex items-center gap-2 text-slate-400">
               <div className="text-xs">Conexão CVM:</div>
