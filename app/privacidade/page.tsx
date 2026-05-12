@@ -39,6 +39,21 @@
               <div className="font-semibold">5. Contato e Suporte</div>
               <div>Para dúvidas sobre esta política ou suporte técnico, entre em contato através do e-mail: licitmasa_suporte@proton.me</div>
             </div>
+            <div className="space-y-2">
+              <div className="font-semibold">6. Exclusão de Conta e Dados</div>
+              <div>
+                Para solicitar a exclusão definitiva da conta e dos dados, acesse a página dedicada:
+                {' '}
+                <a
+                  href="/privacy.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-blue-300 underline underline-offset-4"
+                >
+                  /privacy.html
+                </a>
+              </div>
+            </div>
             <div className="text-xs text-slate-400">© 2026 DiligenceGo - Inteligência Societária</div>
           </div>
          </CardContent>
