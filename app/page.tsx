@@ -400,31 +400,62 @@ export default function Home() {
       return next.slice(0, 2)
     })
   }
+  function buildPeopleShareSections() {
+    const groups = new Map<string, { nome: string; cpf: string; items: PeopleDiligenceMatch[] }>()
+    for (const item of peopleResults) {
+      const cpfLabel = item.cpf || 'CPF não informado'
+      const key = `${item.nome}::${cpfLabel}`
+      const current = groups.get(key) || { nome: item.nome || personNameInput.trim(), cpf: cpfLabel, items: [] }
+      current.items.push(item)
+      groups.set(key, current)
+    }
+    return Array.from(groups.values())
+  }
   function buildPeopleWhatsappText() {
-    const personName = personNameInput.trim()
-    const rows = peopleResults.slice(0, 50).map(item => `- ${item.empresa || 'Empresa não identificada'} (${item.cnpj || 'CNPJ não identificado'}) - ${item.cargo}`)
+    const sections = buildPeopleShareSections().map(group => {
+      const rows = group.items.slice(0, 50).map((item, index) =>
+        `${index + 1}. Empresa: ${item.empresa || 'Empresa não identificada'} | CNPJ: ${item.cnpj || 'CNPJ não identificado'} | Cargo: ${item.cargo} | Ano: ${item.ano}`
+      )
+      return [
+        '===== INICIO DO BLOCO =====',
+        `Nome da Pessoa: ${group.nome || personNameInput.trim() || 'Não informado'}`,
+        `CPF: ${group.cpf}`,
+        ...rows,
+        '===== FIM DO BLOCO ====='
+      ].join('\n')
+    })
     return [
-      `DiligenceGo - Relatório de Vínculos: Encontrei os seguintes registros para ${personName}:`,
-      rows.join('\n'),
+      'DiligenceGo - Relatório de Vínculos',
+      `Pessoa pesquisada: ${personNameInput.trim() || 'Não informado'}`,
+      '',
+      ...sections,
       'Fonte oficial: Dados Abertos CVM.'
     ].filter(Boolean).join('\n')
   }
   function buildPeopleEmailBody() {
-    const lines = peopleResults.map(item => {
-      const details = [
+    const sections = buildPeopleShareSections().map(group => {
+      const rows = group.items.map(item => [
         `Ano: ${item.ano}`,
         `Empresa: ${item.empresa || 'Não identificada'}`,
         `CNPJ: ${item.cnpj || 'Não identificado'}`,
         `Cargo: ${item.cargo}`,
         `Fonte: ${item.fonte}`
-      ]
-      if (item.cpf) details.splice(1, 0, `CPF: ${item.cpf}`)
-      return details.join('\n')
+      ].join('\n'))
+      return [
+        '===== INICIO DO BLOCO =====',
+        `Nome da Pessoa: ${group.nome || personNameInput.trim() || 'Não informado'}`,
+        `CPF: ${group.cpf}`,
+        '',
+        ...rows,
+        '===== FIM DO BLOCO ====='
+      ].join('\n')
     })
     return [
       `Dossiê de Governança - ${personNameInput.trim()}`,
       '',
-      ...lines,
+      `Pessoa pesquisada: ${personNameInput.trim() || 'Não informado'}`,
+      '',
+      ...sections,
       '',
       'Fonte oficial: Dados Abertos CVM.'
     ].join('\n')
@@ -599,6 +630,12 @@ export default function Home() {
       <div className="space-y-3">
         <Card className="rounded-[32px] shadow-2xl border-none bg-slate-900">
           <CardContent className="p-4 space-y-3">
+            <div className="space-y-1">
+              <div className="text-lg font-bold text-white">Diligência Corporativa por CNPJ</div>
+              <div className="text-sm text-slate-300">
+                Consulte estrutura societária, governança, capital social e demais dados públicos oficiais da CVM a partir do CNPJ da companhia.
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input
                 placeholder="00.000.000/0001-00"
