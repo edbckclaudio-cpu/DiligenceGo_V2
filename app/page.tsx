@@ -7,7 +7,8 @@ import { runConsultation } from '../lib/engine'
 import { parseAndFilterByCNPJ, parseNamesAndCNPJs } from '../lib/csv'
 import { saveResult, loadResult, clearOld } from '../lib/cache'
 import { shareCsv, shareText } from '../lib/export'
-import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu, User, Crown, Lock, ExternalLink } from 'lucide-react'
+import { runPeopleDiligence, type PeopleDiligenceMatch } from '../lib/people'
+import { Loader2, Mail, MessageCircle, Search, Download, Circle, Info, Menu, User, Crown, Lock, ExternalLink, X } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Card, CardHeader, CardContent } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -34,8 +35,28 @@ function cleanCNPJ(input: string) {
   return input.replace(/\D/g, '')
 }
 
+function cleanCPF(input: string) {
+  return input.replace(/\D/g, '')
+}
+
 function currentYear() {
   return new Date().getFullYear()
+}
+
+function formatCPF(value: string): string {
+  const digits = cleanCPF(value).slice(0, 11)
+  const parts = [
+    digits.slice(0, 3),
+    digits.slice(3, 6),
+    digits.slice(6, 9),
+    digits.slice(9, 11),
+  ]
+  let out = ''
+  if (parts[0]) out += parts[0]
+  if (parts[1]) out += '.' + parts[1]
+  if (parts[2]) out += '.' + parts[2]
+  if (parts[3]) out += '-' + parts[3]
+  return out
 }
 
 export default function Home() {
@@ -70,8 +91,22 @@ export default function Home() {
   const [secretOpen, setSecretOpen] = useState(false)
   const secretTimerRef = useRef<any>(null)
   const [secretDiag, setSecretDiag] = useState<{ adapters?: string; ready?: string; storeError?: string } | null>(null)
+  const [personNameInput, setPersonNameInput] = useState('')
+  const [personCpfInput, setPersonCpfInput] = useState('')
+  const [peopleYears, setPeopleYears] = useState<number[]>([currentYear()])
+  const [peopleLoading, setPeopleLoading] = useState(false)
+  const [peopleStatus, setPeopleStatus] = useState('')
+  const [peopleProgress, setPeopleProgress] = useState(0)
+  const [peopleError, setPeopleError] = useState<string | null>(null)
+  const [peopleWarning, setPeopleWarning] = useState<string | null>(null)
+  const [peopleResults, setPeopleResults] = useState<PeopleDiligenceMatch[]>([])
+  const [peopleDrawerOpen, setPeopleDrawerOpen] = useState(false)
 
   const key = useMemo(() => `${cleanCNPJ(cnpjInput)}:${year}`, [cnpjInput, year])
+  const peopleYearOptions = useMemo(() => {
+    const base = [currentYear(), currentYear() - 1, currentYear() - 2, currentYear() - 3, currentYear() - 4, currentYear() - 5]
+    return Array.from(new Set(base)).filter(y => y >= 2021)
+  }, [])
 
   useEffect(() => {
     try {
@@ -358,6 +393,106 @@ export default function Home() {
     if (parts[4]) out += '-' + parts[4]
     return out
   }
+  function togglePeopleYear(target: number) {
+    setPeopleYears(current => {
+      if (current.includes(target)) return current.filter(y => y !== target)
+      const next = [...current, target].sort((a, b) => b - a)
+      return next.slice(0, 2)
+    })
+  }
+  function buildPeopleWhatsappText() {
+    const personName = personNameInput.trim()
+    const rows = peopleResults.slice(0, 50).map(item => `- ${item.empresa || 'Empresa não identificada'} (${item.cnpj || 'CNPJ não identificado'}) - ${item.cargo}`)
+    return [
+      `DiligenceGo - Relatório de Vínculos: Encontrei os seguintes registros para ${personName}:`,
+      rows.join('\n'),
+      'Fonte oficial: Dados Abertos CVM.'
+    ].filter(Boolean).join('\n')
+  }
+  function buildPeopleEmailBody() {
+    const lines = peopleResults.map(item => {
+      const details = [
+        `Ano: ${item.ano}`,
+        `Empresa: ${item.empresa || 'Não identificada'}`,
+        `CNPJ: ${item.cnpj || 'Não identificado'}`,
+        `Cargo: ${item.cargo}`,
+        `Fonte: ${item.fonte}`
+      ]
+      if (item.cpf) details.splice(1, 0, `CPF: ${item.cpf}`)
+      return details.join('\n')
+    })
+    return [
+      `Dossiê de Governança - ${personNameInput.trim()}`,
+      '',
+      ...lines,
+      '',
+      'Fonte oficial: Dados Abertos CVM.'
+    ].join('\n')
+  }
+  function openExternalUrl(url: string) {
+    try {
+      window.location.href = url
+    } catch {
+      try { window.open(url, '_blank') } catch {}
+    }
+  }
+  function sharePeopleWhatsapp() {
+    if (!peopleResults.length) return
+    const encoded = encodeURIComponent(buildPeopleWhatsappText())
+    const platform = Capacitor.getPlatform()
+    const native = (Capacitor as any).isNativePlatform?.() ?? (platform !== 'web')
+    const url = native ? `whatsapp://send?text=${encoded}` : `https://wa.me/?text=${encoded}`
+    openExternalUrl(url)
+  }
+  function sharePeopleEmail() {
+    if (!peopleResults.length) return
+    const subject = encodeURIComponent(`Dossiê de Governança - ${personNameInput.trim()}`)
+    const body = encodeURIComponent(buildPeopleEmailBody())
+    openExternalUrl(`mailto:?subject=${subject}&body=${body}`)
+  }
+  async function consultarPessoas() {
+    const name = personNameInput.trim()
+    if (name.length < 2) {
+      setPeopleError('Informe pelo menos 2 caracteres no campo Nome/Pessoa.')
+      return
+    }
+    if (!peopleYears.length) {
+      setPeopleError('Selecione pelo menos 1 ano para a diligência.')
+      return
+    }
+    setPeopleLoading(true)
+    setPeopleError(null)
+    setPeopleWarning(null)
+    setPeopleProgress(0)
+    setPeopleStatus('Preparando diligência de pessoas...')
+    setPeopleResults([])
+    try {
+      const result = await runPeopleDiligence(
+        {
+          name,
+          cpf: personCpfInput,
+          years: peopleYears
+        },
+        {
+          onProgress: progress => setPeopleProgress(Math.max(0, Math.min(100, progress.percent ?? 0))),
+          onStatus: status => setPeopleStatus(status)
+        }
+      )
+      setPeopleResults(result.items)
+      setPeopleWarning(result.warning || null)
+      setPeopleDrawerOpen(result.items.length > 0)
+      if (!result.items.length) {
+        setPeopleError('Nenhum vínculo de governança foi encontrado para os filtros informados.')
+      }
+      try { await Haptics.impact({ style: ImpactStyle.Light }) } catch {}
+    } catch (e: any) {
+      setPeopleError(e?.message || 'Erro ao processar diligência de pessoas.')
+    } finally {
+      setPeopleLoading(false)
+      setPeopleStatus('')
+      setPeopleProgress(0)
+    }
+  }
   function cancelar() {
     canceledRef.current = true
     setStatus('Consulta Cancelada')
@@ -565,6 +700,91 @@ export default function Home() {
                   )}
                 </div>
               </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="rounded-[32px] shadow-2xl border-none bg-slate-900">
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-1">
+              <div className="text-lg font-bold text-white">Diligência de Pessoas (Dossiê do Administrador)</div>
+              <div className="text-sm text-slate-300">
+                Identifique vínculos corporativos e conflitos de interesse cruzando nomes e CPFs em múltiplos órgãos de governança da CVM.
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              <Input
+                placeholder="Nome completo ou parcial da pessoa"
+                value={personNameInput}
+                onChange={e => setPersonNameInput(e.target.value)}
+              />
+              <div className="space-y-2">
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 z-0 flex items-center px-3 font-mono text-sm">
+                    <span className="invisible whitespace-pre">{formatCPF(personCpfInput)}</span>
+                    <span className="whitespace-pre text-slate-500">{'___.___.___-__'.slice(formatCPF(personCpfInput).length)}</span>
+                  </div>
+                  <Input
+                    placeholder=""
+                    inputMode="numeric"
+                    type="tel"
+                    autoComplete="off"
+                    maxLength={14}
+                    className="relative z-10 font-mono"
+                    value={formatCPF(personCpfInput)}
+                    onChange={e => setPersonCpfInput(cleanCPF(e.target.value).slice(0, 11))}
+                  />
+                </div>
+                <div className="text-xs text-slate-400">
+                  Nome aceita busca parcial ou completa. CPF é opcional: digite ou cole os números, e a máscara é aplicada automaticamente.
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-slate-200">Selecionar até 2 anos</div>
+              <div className="flex flex-wrap gap-2">
+                {peopleYearOptions.map(option => {
+                  const active = peopleYears.includes(option)
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      className={`rounded-full border px-4 py-2 text-sm font-medium transition ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-neutral-700 bg-slate-950 text-slate-300'}`}
+                      onClick={() => togglePeopleYear(option)}
+                    >
+                      {option}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <Button
+              className="rounded-full h-14 w-full bg-gradient-to-b from-blue-600 to-blue-700 text-white text-lg font-bold shadow-2xl shadow-blue-500/50"
+              onClick={consultarPessoas}
+              disabled={peopleLoading}
+            >
+              {peopleLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <Search className="h-5 w-5" />
+                  Consultar Dossiê
+                </>
+              )}
+            </Button>
+            {(peopleLoading || peopleStatus) && (
+              <div className="space-y-2">
+                <div className="h-2 w-full bg-neutral-100 rounded overflow-hidden">
+                  <div className="h-full bg-blue-600 transition-all" style={{ width: `${peopleProgress}%` }} />
+                </div>
+                <div className="text-xs text-slate-400">{peopleStatus || 'Processando...'}</div>
+              </div>
+            )}
+            {peopleWarning && <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">{peopleWarning}</div>}
+            {peopleError && <div className="text-sm text-red-400">{peopleError}</div>}
+            {!!peopleResults.length && !peopleDrawerOpen && (
+              <Button variant="outline" className="rounded-full" onClick={() => setPeopleDrawerOpen(true)}>
+                Abrir dossiê encontrado
+              </Button>
             )}
           </CardContent>
         </Card>
@@ -940,6 +1160,81 @@ export default function Home() {
                 Colar na busca principal
               </Button>
               <Button variant="outline" onClick={() => { setShowCnpjsModal(false); setSelectedCnpj(null) }}>Fechar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {peopleDrawerOpen && !!peopleResults.length && (
+        <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setPeopleDrawerOpen(false)}>
+          <div
+            className="absolute inset-x-0 bottom-0 mx-auto flex max-h-[85vh] max-w-2xl flex-col rounded-t-[32px] border border-neutral-800 bg-slate-900 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 rounded-t-[32px] border-b border-neutral-800 bg-slate-900/95 px-4 pb-3 pt-4 backdrop-blur">
+              <div className="pr-12">
+                <div className="text-base font-semibold text-slate-50">Dossiê do Administrador</div>
+                <div className="text-xs text-slate-400">
+                  {personNameInput.trim()} • {peopleResults.length} vínculo{peopleResults.length > 1 ? 's' : ''} encontrado{peopleResults.length > 1 ? 's' : ''}
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Fechar dossiê"
+                className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-700 bg-slate-950 text-slate-200"
+                onClick={() => setPeopleDrawerOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-4 py-4 pb-28">
+              <div className="space-y-3">
+                {peopleWarning && (
+                  <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                    {peopleWarning}
+                  </div>
+                )}
+                {peopleResults.map((item, idx) => (
+                  <Card key={`${item.ano}-${item.cnpj}-${item.fonte}-${idx}`} className="rounded-[28px] border border-neutral-800 bg-slate-950/80 shadow-xl">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-400">Empresa</div>
+                          <div className="text-sm font-semibold text-slate-50">{item.empresa || 'Empresa não identificada'}</div>
+                        </div>
+                        <div className="rounded-full bg-blue-600/15 px-3 py-1 text-xs font-medium text-blue-200">{item.ano}</div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-400">CNPJ</div>
+                          <div className="text-sm text-slate-200">{item.cnpj || 'Não identificado'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-slate-400">Cargo</div>
+                          <div className="text-sm text-slate-200">{item.cargo}</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+                        <span>Nome: {item.nome}</span>
+                        {item.cpf ? <span>CPF: {item.cpf}</span> : null}
+                      </div>
+                      <div className="border-t border-neutral-800 pt-3 text-xs text-slate-400">📂 Fonte: {item.fonte}</div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+            <div
+              className="sticky bottom-0 border-t border-neutral-800 bg-slate-900/95 px-4 pb-safe pt-3 backdrop-blur"
+              style={{ paddingBottom: 'calc(var(--safe-bottom) + 1rem)' }}
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <Button className="h-12 rounded-xl bg-green-600 text-white hover:bg-green-700" onClick={sharePeopleWhatsapp}>
+                  <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
+                </Button>
+                <Button className="h-12 rounded-xl bg-slate-700 text-white hover:bg-slate-600" onClick={sharePeopleEmail}>
+                  <Mail className="mr-1 h-4 w-4" /> E-mail
+                </Button>
+              </div>
             </div>
           </div>
         </div>
