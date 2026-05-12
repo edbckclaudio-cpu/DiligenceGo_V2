@@ -81,6 +81,7 @@ export default function Home() {
   const [showCnpjsModal, setShowCnpjsModal] = useState(false)
   const [cnpjsYear, setCnpjsYear] = useState<number | null>(null)
   const [cnpjsProgress, setCnpjsProgress] = useState<number>(0)
+  const [cnpjsLoading, setCnpjsLoading] = useState(false)
   const [cnpjsList, setCnpjsList] = useState<{ cnpj: string; nome: string }[]>([])
   const [cnpjsFilter, setCnpjsFilter] = useState<string>('')
   const [selectedCnpj, setSelectedCnpj] = useState<string | null>(null)
@@ -107,6 +108,7 @@ export default function Home() {
     const base = [currentYear(), currentYear() - 1, currentYear() - 2, currentYear() - 3, currentYear() - 4, currentYear() - 5]
     return Array.from(new Set(base)).filter(y => y >= 2021)
   }, [])
+  const canUsePeopleModule = logged && isPremium
 
   useEffect(() => {
     try {
@@ -207,6 +209,7 @@ export default function Home() {
     try {
       setShowCnpjsModal(true)
       setCnpjsYear(y)
+      setCnpjsLoading(true)
       setCnpjsProgress(5)
       const url = `https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_${y}.zip`.trim()
       const buffer = await fetchZipDFP(url, p => setCnpjsProgress(Math.max(0, Math.min(100, p.percent ?? 0))))
@@ -230,6 +233,7 @@ export default function Home() {
     } catch (e) {
       alert('Falha ao carregar lista de CNPJs: ' + (e as any)?.message)
     } finally {
+      setCnpjsLoading(false)
       setCnpjsProgress(0)
     }
   }
@@ -400,6 +404,17 @@ export default function Home() {
       return next.slice(0, 2)
     })
   }
+  function requirePeopleModuleAccess() {
+    if (!logged) {
+      router.push('/login')
+      return false
+    }
+    if (!isPremium) {
+      router.push('/perfil')
+      return false
+    }
+    return true
+  }
   function buildPeopleShareSections() {
     const groups = new Map<string, { nome: string; cpf: string; items: PeopleDiligenceMatch[] }>()
     for (const item of peopleResults) {
@@ -468,7 +483,7 @@ export default function Home() {
     }
   }
   function sharePeopleWhatsapp() {
-    if (!peopleResults.length) return
+    if (!requirePeopleModuleAccess() || !peopleResults.length) return
     const encoded = encodeURIComponent(buildPeopleWhatsappText())
     const platform = Capacitor.getPlatform()
     const native = (Capacitor as any).isNativePlatform?.() ?? (platform !== 'web')
@@ -476,12 +491,13 @@ export default function Home() {
     openExternalUrl(url)
   }
   function sharePeopleEmail() {
-    if (!peopleResults.length) return
+    if (!requirePeopleModuleAccess() || !peopleResults.length) return
     const subject = encodeURIComponent(`Dossiê de Governança - ${personNameInput.trim()}`)
     const body = encodeURIComponent(buildPeopleEmailBody())
     openExternalUrl(`mailto:?subject=${subject}&body=${body}`)
   }
   async function consultarPessoas() {
+    if (!requirePeopleModuleAccess()) return
     const name = personNameInput.trim()
     if (name.length < 2) {
       setPeopleError('Informe pelo menos 2 caracteres no campo Nome/Pessoa.')
@@ -674,8 +690,9 @@ export default function Home() {
               <button
                 className="text-blue-600 underline inline-flex items-center gap-1 text-sm font-medium"
                 onClick={openCnpjsYearPicker}
+                disabled={cnpjsLoading}
               >
-                <ExternalLink className="h-4 w-4" /> Ver CNPJs listadas na CVM
+                {cnpjsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />} Ver CNPJs listadas na CVM
               </button>
             </div>
             <div className="flex items-center gap-2 text-slate-400">
@@ -748,11 +765,19 @@ export default function Home() {
                 Identifique vínculos corporativos e conflitos de interesse cruzando nomes e CPFs em múltiplos órgãos de governança da CVM.
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3">
+            {!canUsePeopleModule && (
+              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-100">
+                {!logged
+                  ? 'Este módulo exige login com Google e plano Premium.'
+                  : 'Este módulo é exclusivo para usuários Premium. Ative seu plano para consultar o Dossiê do Administrador.'}
+              </div>
+            )}
+            <div className={`grid grid-cols-1 gap-3 ${!canUsePeopleModule ? 'opacity-60' : ''}`}>
               <Input
                 placeholder="Nome completo ou parcial da pessoa"
                 value={personNameInput}
                 onChange={e => setPersonNameInput(e.target.value)}
+                disabled={!canUsePeopleModule}
               />
               <div className="space-y-2">
                 <div className="relative">
@@ -769,6 +794,7 @@ export default function Home() {
                     className="relative z-10 font-mono"
                     value={formatCPF(personCpfInput)}
                     onChange={e => setPersonCpfInput(cleanCPF(e.target.value).slice(0, 11))}
+                    disabled={!canUsePeopleModule}
                   />
                 </div>
                 <div className="text-xs text-slate-400">
@@ -786,7 +812,8 @@ export default function Home() {
                       key={option}
                       type="button"
                       className={`rounded-full border px-4 py-2 text-sm font-medium transition ${active ? 'border-blue-500 bg-blue-600 text-white' : 'border-neutral-700 bg-slate-950 text-slate-300'}`}
-                      onClick={() => togglePeopleYear(option)}
+                      onClick={() => { if (!canUsePeopleModule) { requirePeopleModuleAccess(); return } togglePeopleYear(option) }}
+                      disabled={!canUsePeopleModule}
                     >
                       {option}
                     </button>
@@ -795,7 +822,7 @@ export default function Home() {
               </div>
             </div>
             <Button
-              className="rounded-full h-14 w-full bg-gradient-to-b from-blue-600 to-blue-700 text-white text-lg font-bold shadow-2xl shadow-blue-500/50"
+              className={`rounded-full h-14 w-full bg-gradient-to-b from-blue-600 to-blue-700 text-white text-lg font-bold shadow-2xl shadow-blue-500/50 ${!canUsePeopleModule ? 'opacity-70' : ''}`}
               onClick={consultarPessoas}
               disabled={peopleLoading}
             >
@@ -803,8 +830,8 @@ export default function Home() {
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
-                  <Search className="h-5 w-5" />
-                  Consultar Dossiê
+                  {!canUsePeopleModule ? <Lock className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+                  {!canUsePeopleModule ? (logged ? 'Ativar Premium' : 'Entrar para Consultar') : 'Consultar Dossiê'}
                 </>
               )}
             </Button>
@@ -819,7 +846,7 @@ export default function Home() {
             {peopleWarning && <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">{peopleWarning}</div>}
             {peopleError && <div className="text-sm text-red-400">{peopleError}</div>}
             {!!peopleResults.length && !peopleDrawerOpen && (
-              <Button variant="outline" className="rounded-full" onClick={() => setPeopleDrawerOpen(true)}>
+              <Button variant="outline" className={`rounded-full ${!canUsePeopleModule ? 'opacity-60' : ''}`} onClick={() => { if (!requirePeopleModuleAccess()) return; setPeopleDrawerOpen(true) }}>
                 Abrir dossiê encontrado
               </Button>
             )}
@@ -1139,8 +1166,13 @@ export default function Home() {
                 const ok = confirm('Deseja excluir sua conta e dados? Esta ação é irreversível.')
                 if (!ok) return
                 const res = await deleteCurrentUserData()
-                if (!res.ok) alert('Falha na exclusão: ' + (res.message || ''))
-                else {
+                if (!res.ok) {
+                  alert(res.message || 'Falha ao excluir a conta.')
+                  if (res.code === 'auth_required') {
+                    setShowMainMenu(false)
+                    router.push('/login')
+                  }
+                } else {
                   alert('Conta e dados excluídos.')
                   setShowMainMenu(false)
                 }
@@ -1162,6 +1194,12 @@ export default function Home() {
               <div className="h-1 w-full bg-neutral-800 rounded overflow-hidden">
                 <div className="h-full bg-[#4169E1]" style={{ width: `${cnpjsProgress}%` }} />
               </div>
+              {cnpjsLoading && (
+                <div className="inline-flex items-center gap-2 text-xs text-slate-300">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#4169E1]" />
+                  <span>Buscando CNPJs listadas na CVM. Aguarde alguns segundos...</span>
+                </div>
+              )}
             </div>
             <div className="max-h-[50vh] overflow-y-auto space-y-2">
               {(() => {
@@ -1170,6 +1208,19 @@ export default function Home() {
                 const list = cnpjsList
                   .filter(it => !f || norm(it.nome).startsWith(f))
                   .slice(0, 500)
+                if (cnpjsLoading) {
+                  return (
+                    <div className="rounded-2xl border border-neutral-800 bg-slate-800/40 p-4">
+                      <div className="flex items-center gap-3 text-sm text-slate-200">
+                        <Loader2 className="h-5 w-5 animate-spin text-[#4169E1]" />
+                        <div>
+                          <div className="font-medium">Processando a base da CVM</div>
+                          <div className="text-xs text-slate-400">A lista sera exibida automaticamente assim que o carregamento terminar.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
                 return list.length ? (
                   <div className="space-y-1">
                     {list.map((it, idx) => (
